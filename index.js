@@ -20,7 +20,6 @@ const client = new MongoClient(uri, {
 
 // Add this near the top of the file, after other requires
 const cron = require('node-cron');
-
 async function run() {
   try {
     // Connect the client to the server
@@ -35,7 +34,8 @@ async function run() {
     const LeaveCollection = client.db('Office').collection('Leave');
     // Create a new collection for location changes
     const LocationChangeCollection = client.db('Office').collection('LocationChange');
-
+    const JobPostCollection = client.db('Office').collection('Jobs');
+    const JobApplicationCollection = client.db('Office').collection('JobApplications');
     // Auto check-out users at end of day (5:01 PM)
     cron.schedule('1 17 * * 1-5', async () => {
       console.log('Running auto check-out job');
@@ -261,54 +261,54 @@ async function run() {
           date: today,
         });
 
-        // // If no record exists and it's after work hours, automatically mark as absent
-        // if (!attendance) {
-        //   const now = new Date();
+        // If no record exists and it's after work hours, automatically mark as absent
+        if (!attendance) {
+          const now = new Date();
 
-        //   // Correct workday end at 5:00 PM UTC
-        //   const workdayEnd = new Date();
-        //   workdayEnd.setUTCHours(17, 0, 0, 0); // 5:00 PM UTC
+          // Correct workday end at 5:00 PM UTC
+          const workdayEnd = new Date();
+          workdayEnd.setUTCHours(17, 0, 0, 0); // 5:00 PM UTC
 
-        //   // Correct before midnight at 11:59:59 PM UTC
-        //   const beforeMidnight = new Date();
-        //   beforeMidnight.setUTCHours(23, 59, 59, 999);
-        //   // If current time is after 5 PM but before 12 AM, auto-mark as absent
-        //   if (now > workdayEnd && now < beforeMidnight) {
-        //     // Get user details
-        //     const user = await UserCollection.findOne({ emailAddress: email });
+          // Correct before midnight at 11:59:59 PM UTC
+          const beforeMidnight = new Date();
+          beforeMidnight.setUTCHours(23, 59, 59, 999);
+          // If current time is after 5 PM but before 12 AM, auto-mark as absent
+          if (now > workdayEnd && now < beforeMidnight) {
+            // Get user details
+            const user = await UserCollection.findOne({ emailAddress: email });
 
-        //     if (user && user.status === 'approved') {
-        //       // Create absent record
-        //       const absentRecord = {
-        //         userEmail: email,
-        //         userName: user.fullName || 'Unknown',
-        //         userRole: user.userRole,
-        //         date: today,
-        //         status: 'absent',
-        //         location: 'N/A',
-        //         notes: 'Automatically marked absent (end of day)',
-        //         timestamp: new Date().toISOString(),
-        //         autoAbsent: true,
-        //         checkInTime: new Date().toISOString(), // Add a valid check-in time
-        //       };
+            if (user && user.status === 'approved') {
+              // Create absent record
+              const absentRecord = {
+                userEmail: email,
+                userName: user.fullName || 'Unknown',
+                userRole: user.userRole,
+                date: today,
+                status: 'absent',
+                location: 'N/A',
+                notes: 'Automatically marked absent (end of day)',
+                timestamp: new Date().toISOString(),
+                autoAbsent: true,
+                checkInTime: new Date().toISOString(), // Add a valid check-in time
+              };
 
-        //       // Insert the record into the database
-        //       const result = await AttendanceCollection.insertOne(absentRecord);
+              // Insert the record into the database
+              const result = await AttendanceCollection.insertOne(absentRecord);
 
-        //       // Return the newly created absent record
-        //       return res.send({
-        //         isCheckedIn: true, // Explicitly mark as checked in
-        //         status: 'absent',
-        //         autoAbsent: true,
-        //         _id: result.insertedId,
-        //         ...absentRecord,
-        //       });
-        //     }
-        //   }
+              // Return the newly created absent record
+              return res.send({
+                isCheckedIn: true, // Explicitly mark as checked in
+                status: 'absent',
+                autoAbsent: true,
+                _id: result.insertedId,
+                ...absentRecord,
+              });
+            }
+          }
 
-        //   // If current time is past 12:00 AM, do nothing
-        //   return res.send({ isCheckedIn: false });
-        // }
+          // If current time is past 12:00 AM, do nothing
+          return res.send({ isCheckedIn: false });
+        }
 
         // Get location changes for this user and date
         const locationChanges = await LocationChangeCollection.find({
@@ -2156,7 +2156,370 @@ async function run() {
       if (!target) return 0;
       return Math.round((achieved / target) * 100);
     }
+    app.post('/job-posts', async (req, res) => {
+      try {
+        const {
+          title,
+          description,
+          customFields,
+          deadline,
+          postedBy,
+          postedByEmail,
+          postedByRole,
+          status = 'active',
+        } = req.body;
 
+        if (!title || !description || !deadline || !postedByEmail) {
+          return res.status(400).send({ message: 'Required fields missing' });
+        }
+
+        const jobPost = {
+          title,
+          description,
+          customFields: customFields || [],
+          deadline: new Date(deadline),
+          postedBy,
+          postedByEmail,
+          postedByRole,
+          status,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          applications: 0,
+        };
+
+        const result = await JobPostCollection.insertOne(jobPost);
+        res.status(201).send(result);
+      } catch (error) {
+        console.error('Error creating job post:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Get all job posts (with optional filters)
+    app.get('/job-posts', async (req, res) => {
+      try {
+        const { status, postedByEmail } = req.query;
+        const query = {};
+
+        // Add status filter if provided and not 'all'
+        if (status && status !== 'all') {
+          query.status = status;
+        }
+
+        // Add postedByEmail filter if provided
+        if (postedByEmail) {
+          query.postedByEmail = postedByEmail;
+        }
+
+        const result = await JobPostCollection.find(query).sort({ createdAt: -1 }).toArray();
+
+        res.send(result);
+      } catch (error) {
+        console.error('Error fetching job posts:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    app.get('/job-posts/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const query = { _id: new ObjectId(id) };
+
+        const jobPost = await JobPostCollection.findOne(query);
+
+        if (!jobPost) {
+          return res.status(404).send({ message: 'Job post not found' });
+        }
+
+        res.send(jobPost);
+      } catch (error) {
+        console.error('Error fetching job post:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    app.put('/job-posts/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { title, description, customFields, deadline, status } = req.body;
+
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            title,
+            description,
+            customFields,
+            deadline: new Date(deadline),
+            status,
+            updatedAt: new Date(),
+          },
+        };
+
+        const result = await JobPostCollection.updateOne(filter, updateDoc);
+
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: 'Job post not found' });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error('Error updating job post:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    app.delete('/job-posts/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const query = { _id: new ObjectId(id) };
+
+        // First check if there are any applications for this job
+        const applications = await JobApplicationCollection.find({ jobPostId: id }).limit(1).toArray();
+
+        if (applications.length > 0) {
+          return res.status(400).send({
+            message: 'Cannot delete job post with existing applications. Archive it instead.',
+          });
+        }
+
+        const result = await JobPostCollection.deleteOne(query);
+
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: 'Job post not found' });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error('Error deleting job post:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+    app.patch('/job-posts/:id/archive', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            status: 'archived',
+            updatedAt: new Date(),
+          },
+        };
+
+        const result = await JobPostCollection.updateOne(filter, updateDoc);
+
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: 'Job post not found' });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error('Error archiving job post:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+    app.post('/job-applications', async (req, res) => {
+      try {
+        const {
+          jobPostId,
+          personalInfo,
+          educationalBackground,
+          employmentHistory,
+          skillsAndCertifications,
+          references,
+          additionalInfo,
+          contactNumber,
+        } = req.body;
+
+        if (!jobPostId || !personalInfo) {
+          return res.status(400).send({ message: 'Required fields missing' });
+        }
+        const jobPost = await JobPostCollection.findOne({ _id: new ObjectId(jobPostId) });
+
+        if (!jobPost) {
+          return res.status(404).send({ message: 'Job post not found' });
+        }
+
+        if (jobPost.status !== 'active') {
+          return res.status(400).send({ message: 'This job post is no longer accepting applications' });
+        }
+
+        if (new Date(jobPost.deadline) < new Date()) {
+          return res.status(400).send({ message: 'The deadline for this job post has passed' });
+        }
+        const application = {
+          jobPostId: jobPost._id.toString(),
+          jobTitle: jobPost.title,
+          status: 'pending',
+          personalInfo,
+          educationalBackground: educationalBackground || [],
+          employmentHistory: employmentHistory || [],
+          skillsAndCertifications: skillsAndCertifications || {},
+          references: references || [],
+          additionalInfo: additionalInfo || {},
+          appliedAt: new Date(),
+          updatedAt: new Date(),
+        };
+        const result = await JobApplicationCollection.insertOne(application);
+        await JobPostCollection.updateOne({ _id: jobPost._id }, { $inc: { applications: 1 } });
+        res.status(201).send(result);
+      } catch (error) {
+        console.error('Error submitting job application:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+    app.get('/job-applications', async (req, res) => {
+      try {
+        const { jobPostId, status, sort, sortDirection = 'asc' } = req.query;
+        if (!jobPostId) {
+          return res.status(400).send({ message: 'Job post ID is required' });
+        }
+
+        const query = { jobPostId };
+
+        // Add status filter if provided
+        if (status) {
+          query.status = status;
+        }
+
+        // Prepare sorting options
+        const sortOptions = {};
+
+        if (sort) {
+          switch (sort) {
+            case 'age':
+              sortOptions['personalInfo.dateOfBirth'] = sortDirection === 'asc' ? 1 : -1;
+              break;
+            case 'prevCompany':
+              sortOptions['employmentHistory.0.companyName'] = sortDirection === 'asc' ? 1 : -1;
+              break;
+            case 'gender':
+              sortOptions['personalInfo.gender'] = sortDirection === 'asc' ? 1 : -1;
+              break;
+            case 'education':
+              sortOptions['educationalBackground.0.subject'] = sortDirection === 'asc' ? 1 : -1;
+              break;
+            case 'expectedSalary':
+              sortOptions['additionalInfo.expectedSalary'] = sortDirection === 'asc' ? 1 : -1;
+              break;
+            default:
+              sortOptions.appliedAt = -1;
+          }
+        } else {
+          sortOptions.appliedAt = -1;
+        }
+
+        const applications = await JobApplicationCollection.find(query).sort(sortOptions).toArray();
+
+        res.send(applications);
+      } catch (error) {
+        console.error('Error fetching job applications:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Get a single application by ID
+    app.get('/job-applications/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const query = { _id: new ObjectId(id) };
+
+        const application = await JobApplicationCollection.findOne(query);
+
+        if (!application) {
+          return res.status(404).send({ message: 'Application not found' });
+        }
+
+        res.send(application);
+      } catch (error) {
+        console.error('Error fetching job application:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Update application status (shortlist, reject, archive)
+    app.patch('/job-applications/:id/status', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!status || !['pending', 'shortlisted', 'rejected', 'archived'].includes(status)) {
+          return res.status(400).send({ message: 'Valid status is required' });
+        }
+
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            status,
+            updatedAt: new Date(),
+          },
+        };
+
+        const result = await JobApplicationCollection.updateOne(filter, updateDoc);
+
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: 'Application not found' });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error('Error updating application status:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Generate PDF report of applications (endpoint for triggering PDF generation)
+    app.post('/job-applications/generate-report', async (req, res) => {
+      try {
+        const { jobPostId, filters, sortBy, sortDirection } = req.body;
+
+        if (!jobPostId) {
+          return res.status(400).send({ message: 'Job post ID is required' });
+        }
+
+        // This endpoint would typically trigger a background job to generate the PDF
+        // For simplicity, we'll just return a success message
+        // In a real implementation, you would use a library like PDFKit or html-pdf
+        // to generate the PDF and either store it or stream it back to the client
+
+        res.send({
+          message: 'Report generation initiated',
+          status: 'processing',
+          // In a real implementation, you might return a job ID or URL where the PDF will be available
+          reportUrl: `/reports/${jobPostId}_${Date.now()}.pdf`,
+        });
+      } catch (error) {
+        console.error('Error generating report:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Cron job to automatically close job posts after deadline
+    cron.schedule('0 0 * * *', async () => {
+      console.log('Running job post deadline check');
+      try {
+        const now = new Date();
+
+        // Find active job posts with passed deadlines
+        const expiredPosts = await JobPostCollection.find({
+          status: 'active',
+          deadline: { $lt: now },
+        }).toArray();
+
+        console.log(`Found ${expiredPosts.length} expired job posts`);
+
+        // Update their status to 'closed'
+        if (expiredPosts.length > 0) {
+          const result = await JobPostCollection.updateMany(
+            { _id: { $in: expiredPosts.map((post) => post._id) } },
+            { $set: { status: 'closed', updatedAt: now } }
+          );
+
+          console.log(`Closed ${result.modifiedCount} expired job posts`);
+        }
+      } catch (error) {
+        console.error('Error in job post deadline check:', error);
+      }
+    });
     console.log('Done Connect');
   } finally {
     // Ensures that the client will close when you finish/error
