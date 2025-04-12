@@ -276,7 +276,6 @@ async function run() {
           if (now > workdayEnd && now < beforeMidnight) {
             // Get user details
             const user = await UserCollection.findOne({ emailAddress: email });
-
             if (user && user.status === 'approved') {
               // Create absent record
               const absentRecord = {
