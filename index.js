@@ -32,6 +32,10 @@ async function run() {
     const LocationChangeCollection = client.db('Office').collection('LocationChange');
     const JobPostCollection = client.db('Office').collection('Jobs');
     const JobApplicationCollection = client.db('Office').collection('JobApplications');
+    const AgentBranchCollection = client.db('Office').collection('AgentBranch');
+    const AgentBranchMemberCollection = client.db('Office').collection('AgentBranchMember');
+    const AgentBranchTaskCollection = client.db('Office').collection('AgentBranchTask');
+    const noticeCollection = client.db('Office').collection('Notices');
     cron.schedule('1 17 * * 1-5', async () => {
       console.log('Running auto check-out job');
       try {
@@ -2023,6 +2027,622 @@ async function run() {
       } catch (error) {
         console.error('Error generating report:', error);
         res.status(500).send({ message: error.message });
+      }
+    });
+    //agent manager
+    // Get all agent branches
+    app.get('/agent-branches', async (req, res) => {
+      try {
+        const branches = await AgentBranchCollection.find({}).toArray();
+        res.send(branches);
+      } catch (error) {
+        console.error('Error fetching agent branches:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Get agent branches by manager email
+    app.get('/agent-branches/manager/:email', async (req, res) => {
+      try {
+        const { email } = req.params;
+        if (!email) {
+          return res.status(400).send({ message: 'Manager email is required' });
+        }
+
+        const branches = await AgentBranchCollection.find({ branchManagerEmail: email }).toArray();
+        res.send(branches);
+      } catch (error) {
+        console.error('Error fetching agent branches by manager:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Create a new agent branch
+    app.post('/agent-branches', async (req, res) => {
+      try {
+        const { branchName, branchManagerEmail, branchManagerName, branchManagerRole, notes } = req.body;
+
+        if (!branchName || !branchManagerEmail || !branchManagerName || !branchManagerRole) {
+          return res.status(400).send({ message: 'Required fields missing' });
+        }
+
+        // Check if manager already has a branch with the same name
+        const existingBranch = await AgentBranchCollection.findOne({
+          branchManagerEmail,
+          branchName,
+        });
+
+        if (existingBranch) {
+          return res.status(400).send({ message: 'Branch with this name already exists for this manager' });
+        }
+
+        const branch = {
+          branchName,
+          branchManagerEmail,
+          branchManagerName,
+          branchManagerRole,
+          notes: notes || '',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        const result = await AgentBranchCollection.insertOne(branch);
+        res.status(201).send(result);
+      } catch (error) {
+        console.error('Error creating agent branch:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Update an agent branch
+    app.put('/agent-branches/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { branchName, status, notes } = req.body;
+
+        if (!branchName) {
+          return res.status(400).send({ message: 'Branch name is required' });
+        }
+
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            branchName,
+            status: status || 'active',
+            notes: notes || '',
+            updatedAt: new Date().toISOString(),
+          },
+        };
+
+        const result = await AgentBranchCollection.updateOne(filter, updateDoc);
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: 'Agent branch not found' });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error('Error updating agent branch:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Delete an agent branch
+    app.delete('/agent-branches/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        // Check if branch has members
+        const members = await AgentBranchMemberCollection.find({ branchId: id }).limit(1).toArray();
+        if (members.length > 0) {
+          return res.status(400).send({
+            message: 'Cannot delete branch with existing members. Remove members first.',
+          });
+        }
+
+        const result = await AgentBranchCollection.deleteOne({ _id: new ObjectId(id) });
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: 'Agent branch not found' });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error('Error deleting agent branch:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Get all members of a branch
+    app.get('/agent-branches/:branchId/members', async (req, res) => {
+      try {
+        const { branchId } = req.params;
+        const members = await AgentBranchMemberCollection.find({ branchId }).toArray();
+        res.send(members);
+      } catch (error) {
+        console.error('Error fetching branch members:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Add a member to a branch
+    app.post('/agent-branches/:branchId/members', async (req, res) => {
+      try {
+        const { branchId } = req.params;
+        const { memberEmail, memberName, memberRole, notes } = req.body;
+
+        if (!memberEmail || !memberName || !memberRole) {
+          return res.status(400).send({ message: 'Required fields missing' });
+        }
+
+        // Check if branch exists
+        const branch = await AgentBranchCollection.findOne({ _id: new ObjectId(branchId) });
+        if (!branch) {
+          return res.status(404).send({ message: 'Agent branch not found' });
+        }
+
+        // Check if member already exists in this branch
+        const existingMember = await AgentBranchMemberCollection.findOne({
+          branchId,
+          memberEmail,
+        });
+
+        if (existingMember) {
+          return res.status(400).send({ message: 'Member already exists in this branch' });
+        }
+
+        const member = {
+          branchId,
+          branchName: branch.branchName,
+          memberEmail,
+          memberName,
+          memberRole,
+          notes: notes || '',
+          status: 'active',
+          addedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        const result = await AgentBranchMemberCollection.insertOne(member);
+        res.status(201).send(result);
+      } catch (error) {
+        console.error('Error adding branch member:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Remove a member from a branch
+    app.delete('/agent-branches/members/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const result = await AgentBranchMemberCollection.deleteOne({ _id: new ObjectId(id) });
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: 'Branch member not found' });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error('Error removing branch member:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Check if a user is a member of any agent branch
+    app.get('/agent-branches/check-member/:email', async (req, res) => {
+      try {
+        const { email } = req.params;
+        const membership = await AgentBranchMemberCollection.findOne({ memberEmail: email });
+
+        if (membership) {
+          // Get branch details
+          const branch = await AgentBranchCollection.findOne({ _id: new ObjectId(membership.branchId) });
+
+          res.send({
+            isMember: true,
+            membership,
+            branch,
+          });
+        } else {
+          res.send({ isMember: false });
+        }
+      } catch (error) {
+        console.error('Error checking branch membership:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Get all agent branch tasks for a member
+    app.get('/agent-branch-tasks', async (req, res) => {
+      try {
+        const { assigneeId, assignerId, branchId, status } = req.query;
+
+        let query = {};
+
+        if (assigneeId && assignerId) {
+          query = {
+            $or: [{ assigneeId }, { assignerId }],
+          };
+        } else if (assigneeId) {
+          query.assigneeId = assigneeId;
+        } else if (assignerId) {
+          query.assignerId = assignerId;
+        }
+
+        if (branchId) {
+          query.branchId = branchId;
+        }
+
+        if (status) {
+          query.status = status;
+        }
+
+        // Always include taskType to distinguish from regular tasks
+        query.taskType = 'agent';
+
+        const tasks = await AgentBranchTaskCollection.find(query).sort({ status: 1, dueDate: 1 }).toArray();
+
+        res.send(tasks);
+      } catch (error) {
+        console.error('Error fetching agent branch tasks:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Create a new agent branch task
+    app.post('/agent-branch-tasks', async (req, res) => {
+      try {
+        const {
+          branchId,
+          title,
+          description,
+          assigneeId,
+          assignee,
+          assigneeRole,
+          assignerId,
+          assigner,
+          assignerRole,
+          dueDate,
+          priority,
+        } = req.body;
+
+        if (!branchId || !title || !assigneeId || !assignerId || !dueDate) {
+          return res.status(400).send({ message: 'Required fields missing' });
+        }
+
+        const task = {
+          branchId,
+          title,
+          description: description || '',
+          assigneeId,
+          assignee,
+          assigneeRole,
+          assignerId,
+          assigner,
+          assignerRole,
+          dueDate,
+          priority: priority || 'medium',
+          status: 'pending',
+          taskType: 'agent', // Mark as agent branch task
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        const result = await AgentBranchTaskCollection.insertOne(task);
+        res.status(201).send(result);
+      } catch (error) {
+        console.error('Error creating agent branch task:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Update an agent branch task
+    app.put('/agent-branch-tasks/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { title, description, dueDate, priority, status } = req.body;
+
+        if (!title || !dueDate) {
+          return res.status(400).send({ message: 'Title and due date are required' });
+        }
+
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            title,
+            description: description || '',
+            dueDate,
+            priority: priority || 'medium',
+            status: status || 'pending',
+            updatedAt: new Date().toISOString(),
+          },
+        };
+
+        const result = await AgentBranchTaskCollection.updateOne(filter, updateDoc);
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: 'Task not found' });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error('Error updating agent branch task:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Update agent branch task status
+    app.patch('/agent-branch-tasks/:id/status', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!status) {
+          return res.status(400).send({ message: 'Status is required' });
+        }
+
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            status,
+            updatedAt: new Date().toISOString(),
+          },
+        };
+
+        const result = await AgentBranchTaskCollection.updateOne(filter, updateDoc);
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: 'Task not found' });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error('Error updating agent branch task status:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Delete an agent branch task
+    app.delete('/agent-branch-tasks/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const result = await AgentBranchTaskCollection.deleteOne({ _id: new ObjectId(id) });
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: 'Task not found' });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error('Error deleting agent branch task:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Get eligible users for branch manager (usm, asm, rsm roles)
+    app.get('/eligible-branch-managers', async (req, res) => {
+      try {
+        const eligibleUsers = await UserCollection.find({
+          userRole: { $in: ['usm', 'asm', 'rsm'] },
+        }).toArray();
+
+        res.send(eligibleUsers);
+      } catch (error) {
+        console.error('Error fetching eligible branch managers:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // Get eligible users for branch members (usm, asm, rsm roles)
+    app.get('/eligible-branch-members', async (req, res) => {
+      try {
+        const { excludeEmail } = req.query;
+
+        const query = {
+          userRole: { $in: ['usm', 'asm', 'rsm'] },
+        };
+
+        // Exclude the manager if provided
+        if (excludeEmail) {
+          query.emailAddress = { $ne: excludeEmail };
+        }
+
+        const eligibleUsers = await UserCollection.find(query).toArray();
+
+        res.send(eligibleUsers);
+      } catch (error) {
+        console.error('Error fetching eligible branch members:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+    app.get('/notices', async (req, res) => {
+      try {
+        const notices = await noticeCollection.find({}).sort({ createdAt: -1 }).toArray();
+        res.status(200).json(notices);
+      } catch (error) {
+        console.error('Error fetching notices:', error);
+        res.status(500).json({ message: 'Failed to fetch notices', error: error.message });
+      }
+    });
+
+    // Get notice by ID
+    app.get('/notices/:id', async (req, res) => {
+      try {
+        const noticeId = req.params.id;
+        const notice = await noticeCollection.findOne({ _id: new ObjectId(noticeId) });
+
+        if (!notice) {
+          return res.status(404).json({ message: 'Notice not found' });
+        }
+
+        res.status(200).json(notice);
+      } catch (error) {
+        console.error('Error fetching notice:', error);
+        res.status(500).json({ message: 'Failed to fetch notice', error: error.message });
+      }
+    });
+
+    // Create new notice (only HR and BH)
+    app.post('/notices', async (req, res) => {
+      try {
+        const { title, content, category, authorEmail, authorName, authorRole } = req.body;
+
+        // Check if user has permission (HR or BH)
+        if (authorRole !== 'hr' && authorRole !== 'bd') {
+          return res.status(403).json({ message: 'You do not have permission to create notices' });
+        }
+
+        // Validate required fields
+        if (!title || !content || !authorEmail || !authorName || !authorRole) {
+          return res.status(400).json({ message: 'Missing required fields' });
+        }
+
+        const newNotice = {
+          title,
+          content,
+          category: category || 'General',
+          authorEmail,
+          authorName,
+          authorRole,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          isActive: true,
+        };
+
+        const result = await noticeCollection.insertOne(newNotice);
+
+        res.status(201).json({
+          message: 'Notice created successfully',
+          noticeId: result.insertedId,
+          notice: newNotice,
+        });
+      } catch (error) {
+        console.error('Error creating notice:', error);
+        res.status(500).json({ message: 'Failed to create notice', error: error.message });
+      }
+    });
+
+    // Update notice (only HR and BH)
+    app.put('/notices/:id', async (req, res) => {
+      try {
+        const noticeId = req.params.id;
+        const { title, content, category, authorEmail, authorRole } = req.body;
+
+        // Check if user has permission (HR or BH)
+        if (authorRole !== 'hr' && authorRole !== 'bd') {
+          return res.status(403).json({ message: 'You do not have permission to update notices' });
+        }
+
+        // Get the existing notice
+        const existingNotice = await noticeCollection.findOne({ _id: new ObjectId(noticeId) });
+
+        if (!existingNotice) {
+          return res.status(404).json({ message: 'Notice not found' });
+        }
+
+        // Check if the user is the author or has admin privileges
+        if (existingNotice.authorEmail !== authorEmail && authorRole !== 'admin' && authorRole !== 'bd') {
+          return res.status(403).json({ message: 'You can only update your own notices' });
+        }
+
+        const updatedNotice = {
+          $set: {
+            title: title || existingNotice.title,
+            content: content || existingNotice.content,
+            category: category || existingNotice.category,
+            updatedAt: new Date(),
+          },
+        };
+
+        await noticeCollection.updateOne({ _id: new ObjectId(noticeId) }, updatedNotice);
+
+        res.status(200).json({ message: 'Notice updated successfully' });
+      } catch (error) {
+        console.error('Error updating notice:', error);
+        res.status(500).json({ message: 'Failed to update notice', error: error.message });
+      }
+    });
+
+    // Delete notice (only HR and BH)
+    app.delete('/notices/:id', async (req, res) => {
+      try {
+        const noticeId = req.params.id;
+        const { authorEmail, authorRole } = req.query;
+
+        // Check if user has permission (HR or BH)
+        if (authorRole !== 'hr' && authorRole !== 'bd') {
+          return res.status(403).json({ message: 'You do not have permission to delete notices' });
+        }
+
+        // Get the existing notice
+        const existingNotice = await noticeCollection.findOne({ _id: new ObjectId(noticeId) });
+
+        if (!existingNotice) {
+          return res.status(404).json({ message: 'Notice not found' });
+        }
+
+        // Check if the user is the author or has admin privileges
+        if (existingNotice.authorEmail !== authorEmail && authorRole !== 'admin' && authorRole !== 'bd') {
+          return res.status(403).json({ message: 'You can only delete your own notices' });
+        }
+
+        await noticeCollection.deleteOne({ _id: new ObjectId(noticeId) });
+
+        res.status(200).json({ message: 'Notice deleted successfully' });
+      } catch (error) {
+        console.error('Error deleting notice:', error);
+        res.status(500).json({ message: 'Failed to delete notice', error: error.message });
+      }
+    });
+
+    // Toggle notice active status (only HR and BH)
+    app.patch('/notices/:id/toggle-status', async (req, res) => {
+      try {
+        const noticeId = req.params.id;
+        const { authorEmail, authorRole } = req.body;
+
+        // Check if user has permission (HR or BH)
+        if (authorRole !== 'hr' && authorRole !== 'bd') {
+          return res.status(403).json({ message: 'You do not have permission to update notice status' });
+        }
+
+        // Get the existing notice
+        const existingNotice = await noticeCollection.findOne({ _id: new ObjectId(noticeId) });
+
+        if (!existingNotice) {
+          return res.status(404).json({ message: 'Notice not found' });
+        }
+
+        // Check if the user is the author or has admin privileges
+        if (existingNotice.authorEmail !== authorEmail && authorRole !== 'admin' && authorRole !== 'bd') {
+          return res.status(403).json({ message: 'You can only update your own notices' });
+        }
+
+        const updatedStatus = {
+          $set: {
+            isActive: !existingNotice.isActive,
+            updatedAt: new Date(),
+          },
+        };
+
+        await noticeCollection.updateOne({ _id: new ObjectId(noticeId) }, updatedStatus);
+
+        res.status(200).json({
+          message: `Notice ${existingNotice.isActive ? 'deactivated' : 'activated'} successfully`,
+          isActive: !existingNotice.isActive,
+        });
+      } catch (error) {
+        console.error('Error toggling notice status:', error);
+        res.status(500).json({ message: 'Failed to update notice status', error: error.message });
+      }
+    });
+
+    // Add this to the cron job section
+    cron.schedule('0 0 * * *', async () => {
+      console.log('Running agent branch task cleanup job');
+      try {
+        const result = await AgentBranchTaskCollection.deleteMany({
+          status: 'completed',
+          updatedAt: { $lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }, // 7 days old
+        });
+        console.log(`Deleted ${result.deletedCount} completed agent branch tasks`);
+      } catch (error) {
+        console.error('Error in agent branch task cleanup process:', error);
       }
     });
     cron.schedule('0 0 * * *', async () => {
