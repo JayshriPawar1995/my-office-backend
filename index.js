@@ -7,8 +7,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const uri =
-  'mongodb+srv://OfficeDemo:g3QILRE7ZuYsTZVT@cluster0.pcjdk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+const uri = `mongodb+srv://Office2:XWPsENFTFOY1qIV0@cluster0.rabv0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
