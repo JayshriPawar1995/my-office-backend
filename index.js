@@ -6,11 +6,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
-
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const uri = `mongodb+srv://Office:${process.env.DB_PASS}@cluster0.rabv0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
-
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+const uri =
+  'mongodb+srv://OfficeDemo:g3QILRE7ZuYsTZVT@cluster0.pcjdk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -18,10 +16,8 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   },
 });
-
 async function run() {
   try {
-    // Connect the client to the server
     console.log('Connecting to MongoDB...');
     const UserCollection = client.db('Office').collection('User');
     const AttendanceCollection = client.db('Office').collection('Attendance');
@@ -62,7 +58,7 @@ async function run() {
                 checkOutTime: endOfDay.toISOString(),
                 workHours: workHours,
                 autoCheckOut: true,
-                checkOutLocation: record.lastLocation || record.location || 'Office', // Use last known location
+                checkOutLocation: record.lastLocation || record.location || 'Office',
               },
             }
           );
@@ -577,10 +573,15 @@ async function run() {
     });
     app.get('/attendance/all', async (req, res) => {
       try {
-        const { date, status } = req.query;
+        const { date, status, startDate, endDate } = req.query;
         const query = {};
         if (date) {
           query.date = date;
+        } else if (startDate && endDate) {
+          query.date = {
+            $gte: startDate,
+            $lte: endDate,
+          };
         }
         if (status && status !== 'all') {
           if (status === 'remote') {
@@ -597,7 +598,6 @@ async function run() {
           })
             .sort({ timestamp: 1 })
             .toArray();
-
           record.locationChanges = locationChanges;
         }
         res.send(result);
