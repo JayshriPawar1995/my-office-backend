@@ -600,6 +600,25 @@ async function run() {
           record.locationChanges = locationChanges;
         }
         res.send(result);
+        // res.send([
+        //   {
+        //     userEmail: 'Data Loading...',
+        //     userName: 'NA',
+        //     userRole: 'NA',
+        //     date: 'NA',
+        //     status: 'Unload',
+        //     location: 'N/A',
+        //     notes: 'Too much data to load, please try to logic each 2 month on free tier or use upper tier',
+        //     timestamp: 'NA',
+        //     autoAbsent: false,
+        //     checkInTime: 'NA',
+        //     checkOutLocation: 'Database Error',
+        //     checkOutLocationType: 'Database Error',
+        //     checkOutNotes: '',
+        //     checkOutTime: 'NA',
+        //     workHours: '0h 0m',
+        //   },
+        // ]);
       } catch (error) {
         console.error(error);
         res.status(500).send({ message: error.message });
