@@ -31,6 +31,7 @@ async function run() {
     const AgentBranchMemberCollection = client.db('Office').collection('AgentBranchMember');
     const AgentBranchTaskCollection = client.db('Office').collection('AgentBranchTask');
     const noticeCollection = client.db('Office').collection('Notices');
+    const AccountDetailsCollection  = client.db('Office').collection('Accountdetails');
     cron.schedule('1 17 * * 1-5', async () => {
       console.log('Running auto check-out job');
       try {
@@ -193,6 +194,18 @@ async function run() {
         res.status(500).send({ message: error.message });
       }
     });
+
+
+    app.post('/account-details ', async (req, res) => {
+      try {
+        const accountdetails = req.body;
+        const result = await UserCollection.insertOne(accountdetails);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: error.message });
+      }
+    });
+
     app.get('/attendance/status', async (req, res) => {
       try {
         const { email, date } = req.query;
@@ -1810,6 +1823,7 @@ async function run() {
         res.status(500).send({ message: error.message });
       }
     });
+
     app.get('/job-posts', async (req, res) => {
       try {
         const { status, postedByEmail } = req.query;
@@ -1827,6 +1841,7 @@ async function run() {
         res.status(500).send({ message: error.message });
       }
     });
+
     app.get('/job-posts/:id', async (req, res) => {
       try {
         const { id } = req.params;
@@ -1907,6 +1922,101 @@ async function run() {
         res.status(500).send({ message: error.message });
       }
     });
+////////////////////////////////////////////////////////////////////-------------------------------------------------
+app.post('/account-details', async (req, res) => {
+  try {
+    const { accountNumber, initialDeposit, status = 'active' } = req.body;
+
+    // Validate required fields
+    if (!accountNumber || !initialDeposit) {
+      return res.status(400).send({ message: 'Account number and initial deposit are required' });
+    }
+
+    const accountDetail = {
+      accountNumber,
+      initialDeposit,
+      status: status === 'deactive' ? 'deactive' : 'active', // only allow "active" or "deactive"
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const result = await AccountDetailsCollection.insertOne(accountDetail);
+    res.status(201).send(result);
+  } catch (error) {
+    console.error('Error creating account detail:', error);
+    res.status(500).send({ message: error.message });
+  }
+});
+
+app.get('/account-details', async (req, res) => {
+  try {
+    const { status, accountNumber } = req.query;
+    const query = {};
+
+    // Optional filter: status
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+
+    // Optional filter: account number (exact match)
+    if (accountNumber) {
+      query.accountNumber = accountNumber;
+    }
+
+    const result = await AccountDetailsCollection.find(query)
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send(result);
+  } catch (error) {
+    console.error('Error fetching account details:', error);
+    res.status(500).send({ message: error.message });
+  }
+});
+
+app.get('/account-details/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate and convert id to ObjectId
+    const query = { _id: new ObjectId(id) };
+
+    const accountDetail = await AccountDetailsCollection.findOne(query);
+
+    if (!accountDetail) {
+      return res.status(404).send({ message: 'Account detail not found' });
+    }
+
+    res.send(accountDetail);
+  } catch (error) {
+    console.error('Error fetching account detail:', error);
+    res.status(500).send({ message: error.message });
+  }
+});
+
+app.delete('/account-details/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const query = { _id: new ObjectId(id) };
+
+    const result = await AccountDetailsCollection.deleteOne(query);
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send({ message: 'Account detail not found' });
+    }
+
+    res.send({ message: 'Account detail deleted successfully', result });
+  } catch (error) {
+    console.error('Error deleting account detail:', error);
+    res.status(500).send({ message: error.message });
+  }
+});
+
+
+
+
+
+
     app.post('/job-applications', async (req, res) => {
       try {
         const {
