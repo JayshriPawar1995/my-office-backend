@@ -32,6 +32,7 @@ async function run() {
     const AgentBranchTaskCollection = client.db('Office').collection('AgentBranchTask');
     const noticeCollection = client.db('Office').collection('Notices');
     const AccountDetailsCollection  = client.db('Office').collection('Accountdetails');
+     const TicketCollection  = client.db('Office').collection('tickets');
     cron.schedule('1 17 * * 1-5', async () => {
       console.log('Running auto check-out job');
       try {
@@ -771,6 +772,7 @@ async function run() {
           dayEndHandCash,
           dayEndMotherBalance,
           agentBoothName,
+          salary,
           notes,
         } = req.body;
 
@@ -828,6 +830,7 @@ async function run() {
           dayEndHandCash: Number(dayEndHandCash) || 0,
           dayEndMotherBalance: Number(dayEndMotherBalance) || 0,
           agentBoothName: agentBoothName || '',
+          salary:salary || '',
           notes: notes || '',
           timestamp: new Date().toISOString(),
         };
@@ -865,6 +868,7 @@ async function run() {
           dayEndHandCash,
           dayEndMotherBalance,
           agentBoothName,
+          salary,
           notes,
         } = req.body;
         const calculatedTodayDeposit =
@@ -909,6 +913,7 @@ async function run() {
             dayEndHandCash: Number(dayEndHandCash) || 0,
             dayEndMotherBalance: Number(dayEndMotherBalance) || 0,
             agentBoothName: agentBoothName || '',
+            salary:salary || '',
             notes: notes || '',
             updatedAt: new Date().toISOString(),
           },
@@ -1755,11 +1760,13 @@ async function run() {
     });
     app.patch('/approve-leaves/:id', async (req, res) => {
       try {
+        const { remark } = req.body;
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
         const updatedData = {
           $set: {
             status: 'Approved',
+            remark: remark || "" 
           },
         };
         const result = await LeaveCollection.updateOne(query, updatedData);
@@ -1768,13 +1775,17 @@ async function run() {
         res.send(error);
       }
     });
+
+    
     app.patch('/reject-leaves/:id', async (req, res) => {
       try {
+         const { remark } = req.body;
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
         const updatedData = {
           $set: {
             status: 'Rejected',
+             remark: remark || ""
           },
         };
         const result = await LeaveCollection.updateOne(query, updatedData);
@@ -2011,6 +2022,87 @@ app.delete('/account-details/:id', async (req, res) => {
     res.status(500).send({ message: error.message });
   }
 });
+
+app.put('/account-details/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+         const { accountNumber, initialDeposit, status = 'active' } = req.body;
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            accountNumber,
+            initialDeposit,
+           
+           
+            status,
+            updatedAt: new Date(),
+          },
+        };
+        const result = await AccountDetailsCollection.updateOne(filter, updateDoc);
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: 'Job post not found' });
+        }
+        res.send(result);
+      } catch (error) {
+        console.error('Error updating job post:', error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+
+
+
+
+
+ app.post('/create-ticket', async (req, res) => {
+  try {
+    const { subject, description, status = 'Open', userEmail  } = req.body;
+
+    if (!subject || !description) {
+      return res.status(400).send({ message: 'Subject and description are required.' });
+    }
+
+    const ticket = {
+      subject,
+      description,
+      status,
+      userEmail,
+      comments,
+      createdAt: new Date(),
+      updatedAt: new Date(), 
+    };
+
+    const result = await TicketCollection.insertOne(ticket);
+    res.status(201).send(result);
+  } catch (error) {
+    console.error("Error creating ticket:", error);
+    res.status(500).send({ message: error.message });
+  }
+});
+
+
+app.get('/ticket/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate and convert ID
+    const query = { _id: new ObjectId(id) };
+
+    const ticket = await TicketCollection.findOne(query);
+
+    if (!ticket) {
+      return res.status(404).send({ message: 'Ticket not found' });
+    }
+
+    res.send(ticket);
+  } catch (error) {
+    console.error('Error fetching ticket:', error);
+    res.status(500).send({ message: error.message });
+  }
+});
+
+
+///////////////////////////////////////////////////////////--------------------------------------------------------
 
 
 
