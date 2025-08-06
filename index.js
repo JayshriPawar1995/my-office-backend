@@ -1370,17 +1370,32 @@ app.get('/performancePayroll', async (req, res) => {
       });
     });
 
+      
     // Use passed salary OR fallback to target base salary OR default
-    const baseSalary = Number(salary) || target.baseSalary || 20000;
-    const targetDeposit = target.depositsTarget || 100000;
-    const targetAccounts = target.accountTarget || 6;
+   const parsedSalary = Number(salary); 
+   const baseSalary = !isNaN(parsedSalary) ? parsedSalary : (target.baseSalary || 0);
+    const targetDeposit = target.depositsTarget || 0;
+    const targetAccounts = target.accountTarget || 0;
 
-    const depositPercentage = targetDeposit ? (totalDeposit / targetDeposit) * 100 : 0;
+    const depositPercentage = targetDeposit ? (totalDeposit / targetDeposit) * 100 : 0; 
     const accountPercentage = targetAccounts ? (weightedAccounts / targetAccounts) * 100 : 0;
     const averagePercentage = (depositPercentage + accountPercentage) / 2;
 
-    const finalSalary = (averagePercentage / 100) * baseSalary;
-
+    const finalSalary = (averagePercentage / 100) * baseSalary; 
+console.log('---------------------------------------------------------------')
+    console.log({
+  salary,
+  baseSalary,
+  targetDeposit,
+  totalDeposit,
+  depositPercentage,
+  targetAccounts,
+  weightedAccounts,
+  accountPercentage,
+  averagePercentage,
+  finalSalary
+});
+    
     res.send({
       userEmail,
       baseSalary,
@@ -1390,10 +1405,10 @@ app.get('/performancePayroll', async (req, res) => {
       targetAccounts,
       weightedAccounts: weightedAccounts.toFixed(2),
       accountPercentage: accountPercentage.toFixed(2),
-      averagePerformance: averagePercentage.toFixed(2),
+      averagePerformance: averagePercentage.toFixed(2), 
       finalSalary: finalSalary.toFixed(2) + ' BDT',
     });
-  } catch (error) {
+  } catch (error) {   
     console.error('Error calculating payroll:', error);
     res.status(500).send({ message: error.message });
   }
