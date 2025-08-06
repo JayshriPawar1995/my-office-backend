@@ -1373,7 +1373,7 @@ app.get('/performancePayroll', async (req, res) => {
       
     // Use passed salary OR fallback to target base salary OR default
    const parsedSalary = Number(salary); 
-   const baseSalary = !isNaN(parsedSalary) ? parsedSalary : (target.baseSalary || 0);
+   const baseSalary = !isNaN(parsedSalary) ? parsedSalary : (target.baseSalary || 0); 
     const targetDeposit = target.depositsTarget || 0;
     const targetAccounts = target.accountTarget || 0;
 
@@ -1382,19 +1382,7 @@ app.get('/performancePayroll', async (req, res) => {
     const averagePercentage = (depositPercentage + accountPercentage) / 2;
 
     const finalSalary = (averagePercentage / 100) * baseSalary; 
-console.log('---------------------------------------------------------------')
-    console.log({
-  salary,
-  baseSalary,
-  targetDeposit,
-  totalDeposit,
-  depositPercentage,
-  targetAccounts,
-  weightedAccounts,
-  accountPercentage,
-  averagePercentage,
-  finalSalary
-});
+
     
     res.send({
       userEmail,
@@ -2025,7 +2013,7 @@ console.log('---------------------------------------------------------------')
 ////////////////////////////////////////////////////////////////////-------------------------------------------------
 app.post('/account-details', async (req, res) => {
   try {
-    const { accountNumber, initialDeposit, status = 'active' } = req.body;
+    const { accountNumber, initialDeposit, status = 'active',postedByEmail  } = req.body;
 
     // Validate required fields
     if (!accountNumber || !initialDeposit) {
@@ -2033,6 +2021,7 @@ app.post('/account-details', async (req, res) => {
     }
 
     const accountDetail = {
+      postedByEmail,
       accountNumber,
       initialDeposit,
       status: status === 'deactive' ? 'deactive' : 'active', // only allow "active" or "deactive"
