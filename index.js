@@ -1342,9 +1342,24 @@ app.get('/performancePayroll', async (req, res) => {
       year: Number.parseInt(year),
     });
 
-    if (!target) {
-      return res.status(404).send({ message: 'No target found for this month' });
-    }
+  if (!target) {
+  const fallbackSalary = Number(salary) || 0;
+  return res.send({
+    userEmail,
+    baseSalary: fallbackSalary,
+    targetDeposit: 0,
+    actualDeposit: 0,
+    depositPercentage: "0.00",
+    targetAccounts: 0,
+    weightedAccounts: "0.00",
+    accountPercentage: "0.00",
+    averagePerformance: "0.00",
+    finalSalary: "0.00 BDT",
+    accountsList: [], 
+    message: "No target found. Returning default salary performance as zero.",
+  });
+}
+
 
     const startDate = new Date(Number(year), Number(month) - 1, 1);
     const endDate = new Date(Number(year), Number(month), 0, 23, 59, 59);
@@ -1366,6 +1381,10 @@ app.get('/performancePayroll', async (req, res) => {
       createdAt: { $gte: startDate, $lte: endDate },
     }).toArray();
 
+
+    console.log('Account Details Found:------------------') 
+    console.log(accountDetails.length);
+
     const accountsList = accountDetails.map((account) => Number(account.depositAmount || 0));
 
     // Calculate weighted accounts
@@ -1382,19 +1401,19 @@ app.get('/performancePayroll', async (req, res) => {
     const parsedSalary = Number(salary);
     const baseSalary = !isNaN(parsedSalary) ? parsedSalary : (target.baseSalary || 0);
     const targetDeposit = target.depositsTarget || 0;
-    const targetAccounts = target.accountTarget || 0;
+    const targetAccounts = target.accountTarget ?? 145;
 
     const depositPercentage = targetDeposit ? (totalDeposit / targetDeposit) * 100 : 0;
     const accountPercentage = targetAccounts ? (weightedAccounts / targetAccounts) * 100 : 0;
     const averagePercentage = (depositPercentage + accountPercentage) / 2;
     const finalSalary = (averagePercentage / 100) * baseSalary;
 
-    res.send({
+    res.send({ 
       userEmail,
       baseSalary,
       targetDeposit,
       actualDeposit: totalDeposit,
-      depositPercentage: depositPercentage.toFixed(2),
+      depositPercentage: depositPercentage.toFixed(2), 
       targetAccounts,
       weightedAccounts: weightedAccounts.toFixed(2),
       accountPercentage: accountPercentage.toFixed(2),
@@ -1403,7 +1422,7 @@ app.get('/performancePayroll', async (req, res) => {
       accountsList,
     });
   } catch (error) {
-    console.error('Error calculating payroll:', error);
+    console.error('Error calculating payroll:', error); 
     res.status(500).send({ message: error.message }); 
   }
 });
