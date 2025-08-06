@@ -1346,44 +1346,49 @@ app.get('/performancePayroll', async (req, res) => {
       return res.status(404).send({ message: 'No target found for this month' });
     }
 
-    const startDate = new Date(Number(year), Number(month) - 1, 1).toISOString().split('T')[0];
-    const endDate = new Date(Number(year), Number(month), 0).toISOString().split('T')[0];
+    const startDate = new Date(Number(year), Number(month) - 1, 1);
+    const endDate = new Date(Number(year), Number(month), 0, 23, 59, 59);
 
+    // Get total deposits from SalesCollection
     const salesEntries = await SalesCollection.find({
       userEmail,
-      date: { $gte: startDate, $lte: endDate },
+      date: { $gte: startDate.toISOString().split('T')[0], $lte: endDate.toISOString().split('T')[0] },
     }).toArray();
 
     let totalDeposit = 0;
-    let weightedAccounts = 0;
-
     salesEntries.forEach((entry) => {
       totalDeposit += Number(entry.todayDeposit || 0);
-
-      const accountDeposits = entry.depositAmounts || [];
-      accountDeposits.forEach((amount) => {
-        if (amount >= 500) {
-          weightedAccounts += 1;
-        } else if (amount > 0) {
-          weightedAccounts += 0.5;
-        }
-      });
     });
 
-      
-    // Use passed salary OR fallback to target base salary OR default
-   const parsedSalary = Number(salary); 
-   const baseSalary = !isNaN(parsedSalary) ? parsedSalary : (target.baseSalary || 0); 
+    // Get account-level deposits from AccountDetailsCollection
+    const accountDetails = await AccountDetailsCollection.find({
+      userEmail,
+      createdAt: { $gte: startDate, $lte: endDate },
+    }).toArray();
+
+    const accountsList = accountDetails.map((account) => Number(account.depositAmount || 0));
+
+    // Calculate weighted accounts
+    let weightedAccounts = 0;
+    accountsList.forEach((amount) => {
+      if (amount >= 500) {
+        weightedAccounts += 1;
+      } else if (amount > 0) {
+        weightedAccounts += 0.5;
+      }
+    });
+
+    // Calculate performance-based salary
+    const parsedSalary = Number(salary);
+    const baseSalary = !isNaN(parsedSalary) ? parsedSalary : (target.baseSalary || 0);
     const targetDeposit = target.depositsTarget || 0;
     const targetAccounts = target.accountTarget || 0;
 
-    const depositPercentage = targetDeposit ? (totalDeposit / targetDeposit) * 100 : 0; 
+    const depositPercentage = targetDeposit ? (totalDeposit / targetDeposit) * 100 : 0;
     const accountPercentage = targetAccounts ? (weightedAccounts / targetAccounts) * 100 : 0;
     const averagePercentage = (depositPercentage + accountPercentage) / 2;
+    const finalSalary = (averagePercentage / 100) * baseSalary;
 
-    const finalSalary = (averagePercentage / 100) * baseSalary; 
-
-    
     res.send({
       userEmail,
       baseSalary,
@@ -1393,14 +1398,16 @@ app.get('/performancePayroll', async (req, res) => {
       targetAccounts,
       weightedAccounts: weightedAccounts.toFixed(2),
       accountPercentage: accountPercentage.toFixed(2),
-      averagePerformance: averagePercentage.toFixed(2), 
+      averagePerformance: averagePercentage.toFixed(2),
       finalSalary: finalSalary.toFixed(2) + ' BDT',
+      accountsList,
     });
-  } catch (error) {   
+  } catch (error) {
     console.error('Error calculating payroll:', error);
-    res.status(500).send({ message: error.message });
+    res.status(500).send({ message: error.message }); 
   }
 });
+
 
 
     app.post('/batch-update-team-structure', async (req, res) => {
@@ -2013,7 +2020,7 @@ app.get('/performancePayroll', async (req, res) => {
 ////////////////////////////////////////////////////////////////////-------------------------------------------------
 app.post('/account-details', async (req, res) => {
   try {
-    const { accountNumber, initialDeposit, status = 'active',postedByEmail  } = req.body;
+    const { accountNumber, initialDeposit, status = 'active',Email  } = req.body;
 
     // Validate required fields
     if (!accountNumber || !initialDeposit) {
@@ -2021,7 +2028,7 @@ app.post('/account-details', async (req, res) => {
     }
 
     const accountDetail = {
-      postedByEmail,
+      Email,
       accountNumber,
       initialDeposit,
       status: status === 'deactive' ? 'deactive' : 'active', // only allow "active" or "deactive"
