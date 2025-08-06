@@ -1326,6 +1326,80 @@ async function run() {
         res.status(500).send({ message: error.message });
       }
     });
+
+
+app.get('/performancePayroll', async (req, res) => {
+  try {
+    const { userEmail, month, year, salary } = req.query;
+
+    if (!userEmail || !month || !year) {
+      return res.status(400).send({ message: 'User email, month, and year are required' });
+    }
+
+    const target = await TargetsCollection.findOne({
+      userEmail,
+      month: Number.parseInt(month),
+      year: Number.parseInt(year),
+    });
+
+    if (!target) {
+      return res.status(404).send({ message: 'No target found for this month' });
+    }
+
+    const startDate = new Date(Number(year), Number(month) - 1, 1).toISOString().split('T')[0];
+    const endDate = new Date(Number(year), Number(month), 0).toISOString().split('T')[0];
+
+    const salesEntries = await SalesCollection.find({
+      userEmail,
+      date: { $gte: startDate, $lte: endDate },
+    }).toArray();
+
+    let totalDeposit = 0;
+    let weightedAccounts = 0;
+
+    salesEntries.forEach((entry) => {
+      totalDeposit += Number(entry.todayDeposit || 0);
+
+      const accountDeposits = entry.depositAmounts || [];
+      accountDeposits.forEach((amount) => {
+        if (amount >= 500) {
+          weightedAccounts += 1;
+        } else if (amount > 0) {
+          weightedAccounts += 0.5;
+        }
+      });
+    });
+
+    // Use passed salary OR fallback to target base salary OR default
+    const baseSalary = Number(salary) || target.baseSalary || 20000;
+    const targetDeposit = target.depositsTarget || 100000;
+    const targetAccounts = target.accountTarget || 6;
+
+    const depositPercentage = targetDeposit ? (totalDeposit / targetDeposit) * 100 : 0;
+    const accountPercentage = targetAccounts ? (weightedAccounts / targetAccounts) * 100 : 0;
+    const averagePercentage = (depositPercentage + accountPercentage) / 2;
+
+    const finalSalary = (averagePercentage / 100) * baseSalary;
+
+    res.send({
+      userEmail,
+      baseSalary,
+      targetDeposit,
+      actualDeposit: totalDeposit,
+      depositPercentage: depositPercentage.toFixed(2),
+      targetAccounts,
+      weightedAccounts: weightedAccounts.toFixed(2),
+      accountPercentage: accountPercentage.toFixed(2),
+      averagePerformance: averagePercentage.toFixed(2),
+      finalSalary: finalSalary.toFixed(2) + ' BDT',
+    });
+  } catch (error) {
+    console.error('Error calculating payroll:', error);
+    res.status(500).send({ message: error.message });
+  }
+});
+
+
     app.post('/batch-update-team-structure', async (req, res) => {
       try {
         const { userIds, managerEmail, managerName, managerRole } = req.body;
