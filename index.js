@@ -2161,6 +2161,40 @@ app.post('/create-ticket', async (req, res) => {
 
 
 
+app.post('/add-comment/:id', async (req, res) => {
+  try {
+    const ticketId = req.params.id;
+    const { comment, userEmail } = req.body;
+
+    if (!comment) {
+      return res.status(400).send({ message: "Comment text is required" });
+    }
+
+    // Find the ticket by ID and add the new comment
+    const result = await TicketCollection.updateOne(
+      { _id: new ObjectId(ticketId) }, // import ObjectId from mongodb
+      {
+        $push: {
+          comments: {
+            text: comment,
+            commentedBy: userEmail,
+            createdAt: new Date(),
+          }
+        },
+        $set: { updatedAt: new Date() }
+      }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).send({ message: "Ticket not found" });
+    }
+
+    res.status(200).send({ message: "Comment added successfully" });
+  } catch (error) {
+    console.error("Error adding comment:", error);
+    res.status(500).send({ message: error.message });
+  }
+});
 
 
 
