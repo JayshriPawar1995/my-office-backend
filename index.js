@@ -2204,7 +2204,7 @@ app.get('/tickets', async (req, res) => {
     res.send(tickets);
   } catch (error) {
     console.error("Error fetching tickets:", error);
-    res.status(500).send({ message: error.message });
+    res.status(500).send({ message: error.message }); 
   }
 });
 
