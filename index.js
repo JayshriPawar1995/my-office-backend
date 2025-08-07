@@ -2164,53 +2164,50 @@ app.post('/create-ticket', async (req, res) => {
 
 
 
- app.post('/create-ticket', async (req, res) => {
-  try {
-    const { subject,comment, description, status = 'Open', userEmail  } = req.body;
+//  app.post('/create-ticket', async (req, res) => {
+//   try {
+//     const { subject,comment, description, status = 'Open', userEmail  } = req.body;
 
-    if (!subject || !description) {
-      return res.status(400).send({ message: 'Subject and description are required.' });
-    }
+//     if (!subject || !description) {
+//       return res.status(400).send({ message: 'Subject and description are required.' });
+//     }
 
-    const ticket = {
-      subject,
-      description,
-      status,
+//     const ticket = {
+//       subject,
+//       description,
+//       status,
      
-      userEmail,
-      comment,
-      createdAt: new Date(),
-      updatedAt: new Date(), 
-    };
+//       userEmail,
+//       comment,
+//       createdAt: new Date(),
+//       updatedAt: new Date(), 
+//     };
 
-    const result = await TicketCollection.insertOne(ticket);
-    res.status(201).send(result);
-  } catch (error) {
-    console.error("Error creating ticket:", error);
-    res.status(500).send({ message: error.message });
-  }
-});
+//     const result = await TicketCollection.insertOne(ticket);
+//     res.status(201).send(result);
+//   } catch (error) {
+//     console.error("Error creating ticket:", error);
+//     res.status(500).send({ message: error.message });
+//   }
+// });
 
-
-app.get('/ticket/:id', async (req, res) => {
+app.get('/tickets', async (req, res) => {
   try {
-    const { id } = req.params;
+    const { email } = req.query;
 
-    // Validate and convert ID
-    const query = { _id: new ObjectId(id) };
-
-    const ticket = await TicketCollection.findOne(query);
-
-    if (!ticket) {
-      return res.status(404).send({ message: 'Ticket not found' });
+    if (!email) {
+      return res.status(400).send({ message: "Email query parameter is required" });
     }
 
-    res.send(ticket);
+    const tickets = await TicketCollection.find({ userEmail: email }).toArray();
+
+    res.send(tickets);
   } catch (error) {
-    console.error('Error fetching ticket:', error);
+    console.error("Error fetching tickets:", error);
     res.status(500).send({ message: error.message });
   }
 });
+
 
 
 ///////////////////////////////////////////////////////////--------------------------------------------------------
