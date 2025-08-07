@@ -2195,16 +2195,16 @@ app.get('/tickets', async (req, res) => {
   try {
     const { email } = req.query;
 
-    if (!email) {
-      return res.status(400).send({ message: "Email query parameter is required" });
+    let query = {};
+    if (email) {
+      query.userEmail = email;
     }
 
-    const tickets = await TicketCollection.find({ userEmail: email }).toArray();
-
+    const tickets = await TicketCollection.find(query).toArray();
     res.send(tickets);
   } catch (error) {
     console.error("Error fetching tickets:", error);
-    res.status(500).send({ message: error.message }); 
+    res.status(500).send({ message: error.message });
   }
 });
 
