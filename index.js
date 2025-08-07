@@ -2039,7 +2039,7 @@ console.log('Account Details Found:------------------ ')
 ////////////////////////////////////////////////////////////////////-------------------------------------------------
 app.post('/account-details', async (req, res) => {
   try {
-    const { accountNumber, initialDeposit, status = 'active',Email,comments  } = req.body;
+    const { accountNumber, initialDeposit, status = 'active',Email  } = req.body;
 
     // Validate required fields
     if (!accountNumber || !initialDeposit) {
@@ -2050,7 +2050,6 @@ app.post('/account-details', async (req, res) => {
       Email,
       accountNumber,
       initialDeposit,
-      comments,
       status: status === 'deactive' ? 'deactive' : 'active', // only allow "active" or "deactive"
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -2161,7 +2160,7 @@ app.put('/account-details/:id', async (req, res) => {
 
  app.post('/create-ticket', async (req, res) => {
   try {
-    const { subject, description, status = 'Open', userEmail  } = req.body;
+    const { subject,comment, description, status = 'Open', userEmail  } = req.body;
 
     if (!subject || !description) {
       return res.status(400).send({ message: 'Subject and description are required.' });
@@ -2171,8 +2170,9 @@ app.put('/account-details/:id', async (req, res) => {
       subject,
       description,
       status,
+     
       userEmail,
-      comments,
+      comment,
       createdAt: new Date(),
       updatedAt: new Date(), 
     };
