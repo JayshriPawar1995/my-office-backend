@@ -2161,6 +2161,8 @@ app.post('/create-ticket', async (req, res) => {
 
 
 
+const { ObjectId } = require("mongodb");
+
 app.post('/add-comment/:id', async (req, res) => {
   try {
     const ticketId = req.params.id;
@@ -2170,9 +2172,8 @@ app.post('/add-comment/:id', async (req, res) => {
       return res.status(400).send({ message: "Comment text is required" });
     }
 
-    // Find the ticket by ID and add the new comment
     const result = await TicketCollection.updateOne(
-      { _id: new ObjectId(ticketId) }, // import ObjectId from mongodb
+      { _id: new ObjectId(ticketId) },
       {
         $push: {
           comments: {
@@ -2181,7 +2182,10 @@ app.post('/add-comment/:id', async (req, res) => {
             createdAt: new Date(),
           }
         },
-        $set: { updatedAt: new Date() }
+        $set: {
+          updatedAt: new Date(),
+          status: "Done" // 🔥 Status always becomes "Done"
+        }
       }
     );
 
@@ -2189,7 +2193,8 @@ app.post('/add-comment/:id', async (req, res) => {
       return res.status(404).send({ message: "Ticket not found" });
     }
 
-    res.status(200).send({ message: "Comment added successfully" });
+    res.status(200).send({ message: "Comment added and status set to Done." });
+
   } catch (error) {
     console.error("Error adding comment:", error);
     res.status(500).send({ message: error.message });
