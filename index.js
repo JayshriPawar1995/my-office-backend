@@ -2127,31 +2127,37 @@ app.delete('/account-details/:id', async (req, res) => {
   }
 });
 
-app.put('/account-details/:id', async (req, res) => {
-      try {
-        const { id } = req.params;
-         const { accountNumber, initialDeposit, status = 'active' } = req.body;
-        const filter = { _id: new ObjectId(id) };
-        const updateDoc = {
-          $set: {
-            accountNumber,
-            initialDeposit,
-           
-           
-            status,
-            updatedAt: new Date(),
-          },
-        };
-        const result = await AccountDetailsCollection.updateOne(filter, updateDoc);
-        if (result.matchedCount === 0) {
-          return res.status(404).send({ message: 'Job post not found' });
+app.post('/create-ticket', async (req, res) => {
+  try {
+    const { subject, description, status = 'Open', userEmail, comment } = req.body;
+
+    if (!subject || !description) {
+      return res.status(400).send({ message: 'Subject and description are required.' });
+    }
+
+    const ticket = {
+      subject,
+      description,
+      status,
+      userEmail,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      comments: comment ? [ 
+        {
+          text: comment,
+          commentedBy: userEmail,
+          createdAt: new Date(),
         }
-        res.send(result);
-      } catch (error) {
-        console.error('Error updating job post:', error);
-        res.status(500).send({ message: error.message });
-      }
-    });
+      ] : [], // Start with 1 comment if provided, or empty array
+    };
+
+    const result = await TicketCollection.insertOne(ticket);
+    res.status(201).send(result);
+  } catch (error) {
+    console.error("Error creating ticket:", error);
+    res.status(500).send({ message: error.message });
+  }
+});
 
 
 
