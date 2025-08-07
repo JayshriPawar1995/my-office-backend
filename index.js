@@ -1354,7 +1354,7 @@ app.get('/performancePayroll', async (req, res) => {
     weightedAccounts: "0.00",
     accountPercentage: "0.00",
     averagePerformance: "0.00",
-    finalSalary: "0.00 BDT",
+    finalSalary: "0.00 BDT", 
     accountsList: [], 
     message: "No target found. Returning default salary performance as zero.",
   });
@@ -1381,9 +1381,9 @@ app.get('/performancePayroll', async (req, res) => {
       createdAt: { $gte: startDate, $lte: endDate },
     }).toArray();
 
-
-    console.log('Account Details Found:------------------') 
-    console.log(accountDetails.length);
+console.log('Account Details Found:------------------ ') 
+    console.log(accountDetails);
+    
 
     const accountsList = accountDetails.map((account) => Number(account.depositAmount || 0));
 
@@ -2039,7 +2039,7 @@ app.get('/performancePayroll', async (req, res) => {
 ////////////////////////////////////////////////////////////////////-------------------------------------------------
 app.post('/account-details', async (req, res) => {
   try {
-    const { accountNumber, initialDeposit, status = 'active',Email  } = req.body;
+    const { accountNumber, initialDeposit, status = 'active',Email,comments  } = req.body;
 
     // Validate required fields
     if (!accountNumber || !initialDeposit) {
@@ -2050,6 +2050,7 @@ app.post('/account-details', async (req, res) => {
       Email,
       accountNumber,
       initialDeposit,
+      comments,
       status: status === 'deactive' ? 'deactive' : 'active', // only allow "active" or "deactive"
       createdAt: new Date(),
       updatedAt: new Date(),
