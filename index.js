@@ -2124,10 +2124,10 @@ app.post('/account-details', async (req, res) => {
 
 app.get("/account-details", async (req, res) => {
   try {
-    const { userEmail, role } = req.query;
+    const { userEmail, userRole  } = req.query;
 
     // If admin or hr → return all accounts
-    if (role && (role.toLowerCase() === "admin" || role.toLowerCase() === "hr")) {
+    if (userRole  && (userRole .toLowerCase() === "admin" || userRole .toLowerCase() === "hr")) {
       const accounts = await AccountDetailsCollection.find().toArray();
       return res.status(200).json({
         success: true,
