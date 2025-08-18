@@ -2068,61 +2068,68 @@ app.post('/account-details', async (req, res) => {
 
 // Example backend route (Node.js/Express)
 
-router.get("/account-details", async (req, res) => {
-  try {
-    const { userEmail, userRole } = req.query;
-    let accounts = [];
 
-    // ✅ If role is HR or Admin → return ALL accounts
-    if (userRole && ["hr", "admin"].includes(userRole.toLowerCase())) {
-      accounts = await AccountDetailsCollection.find({}).lean();
-    } 
-    else {
-      // ✅ For normal users → require email
-      if (!userEmail) {
-        return res.status(200).json({
-          success: true,
-          count: 0,
-          data: [],
-          message: "Email parameter is required",
+router.get('/account-details', async (req, res) => { 
+    try {
+        const { userEmail, userRole } = req.query;
+        
+        let accounts = [];
+
+        // ✅ If HR or Admin → return ALL accounts
+        if (userRole && ["hr", "admin"].includes(userRole.toLowerCase())) {
+            accounts = await AccountDetailsCollection.find({}).lean();
+        } 
+        else {
+            // ✅ For normal users → require valid email
+            if (!userEmail) {
+                return res.status(400).json({ 
+                    success: false,
+                    message: "Email parameter is required" 
+                });
+            }
+
+            // ✅ Validate email format
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(userEmail)) {
+                return res.status(400).json({ 
+                    success: false,
+                    message: "Invalid email format" 
+                });
+            }
+
+            // ✅ Find accounts by email (case-insensitive)
+            accounts = await AccountDetailsCollection.find({  
+                Email: { 
+                    $regex: new RegExp(`^${userEmail.trim()}$`, 'i') 
+                } 
+            }).lean();
+        }
+
+        // ✅ No accounts found
+        if (!accounts || accounts.length === 0) {
+            return res.status(404).json({ 
+                success: false,
+                message: "No accounts found" 
+            });
+        }
+
+        // ✅ Success
+        res.status(200).json({
+            success: true,
+            count: accounts.length,
+            data: accounts
         });
-      }
 
-      // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(userEmail)) {
-        return res.status(200).json({
-          success: true,
-          count: 0,
-          data: [],
-          message: "Invalid email format",
+    } catch (error) {
+        console.error('Error fetching account details:', error);
+        res.status(500).json({ 
+            success: false,
+            message: "Server error while fetching account details",
+            error: error.message 
         });
-      }
-
-      // ✅ Case-insensitive email match
-      accounts = await AccountDetailsCollection.find({
-        Email: { $regex: `^${userEmail.trim()}$`, $options: "i" },
-      }).lean();
     }
-
-    // ✅ Always return 200
-    res.status(200).json({
-      success: true,
-      count: accounts.length,
-      data: accounts,
-    });
-  } catch (error) {
-    console.error("Error fetching account details:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error while fetching account details", 
-      error: error.message,
-    });
-  }
-});
-
-
-
+});  
+ 
 
 // router.get('/account-details', async (req, res) => { 
 //     try {
@@ -2146,7 +2153,7 @@ router.get("/account-details", async (req, res) => {
 //         }
 
 //         // Find accounts with matching email (case-insensitive)
-//         const accounts = await AccountDetailsCollection.find({ 
+//         const accounts = await AccountDetailsCollection.find({  
 //             Email: { 
 //                 $regex: new RegExp(`^${userEmail.trim()}$`, 'i') 
 //             } 
