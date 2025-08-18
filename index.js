@@ -2092,7 +2092,7 @@ app.get("/account-details", async (req, res) => {
 
     // Case-insensitive exact match
     const accounts = await AccountDetailsCollection.find({
-      userEmail: {
+      Email: {
         $regex: new RegExp(`^${userEmail.trim()}$`, "i"),
       },
     }).lean();
