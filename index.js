@@ -2069,7 +2069,7 @@ app.post('/account-details', async (req, res) => {
 // Example backend route (Node.js/Express)
 
 
-router.get("/account-details", async (req, res) => {
+app.get("/account-details", async (req, res) => {
   try {
     const { userEmail } = req.query;
 
@@ -2100,7 +2100,7 @@ router.get("/account-details", async (req, res) => {
     if (!accounts || accounts.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "No accounts found for this email",
+        message: "No accounts found for this email", 
       });
     }
 
