@@ -2128,7 +2128,7 @@ app.get("/account-details", async (req, res) => {
 
     // If admin or hr → return all accounts
     if (role && (role.toLowerCase() === "admin" || role.toLowerCase() === "hr")) {
-      const accounts = await AccountDetailsCollection.find().lean();
+      const accounts = await AccountDetailsCollection.find().toArray();
       return res.status(200).json({
         success: true,
         count: accounts.length,
@@ -2155,7 +2155,7 @@ app.get("/account-details", async (req, res) => {
     // Return only user-specific accounts
     const accounts = await AccountDetailsCollection.find({
       userEmail: { $regex: new RegExp(`^${userEmail.trim()}$`, "i") },
-    }).lean();
+    }).toArray();
 
     if (!accounts || accounts.length === 0) {
       return res.status(404).json({
