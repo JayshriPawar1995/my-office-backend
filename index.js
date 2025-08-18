@@ -2122,7 +2122,7 @@ app.post('/account-details', async (req, res) => {
    
 
 
-router.get("/account-details", async (req, res) => {
+app.get("/account-details", async (req, res) => {
   try {
     const { userEmail, role } = req.query;
 
