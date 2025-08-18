@@ -2073,11 +2073,12 @@ router.get("/account-details", async (req, res) => {
     const { userEmail, userRole } = req.query;
     let accounts = [];
 
-    // ✅ If HR or Admin → return ALL data
+    // ✅ If role is HR or Admin → return ALL accounts
     if (userRole && ["hr", "admin"].includes(userRole.toLowerCase())) {
       accounts = await AccountDetailsCollection.find({}).lean();
-    } else {
-      // ✅ For normal users → require valid email
+    } 
+    else {
+      // ✅ For normal users → require email
       if (!userEmail) {
         return res.status(200).json({
           success: true,
@@ -2098,15 +2099,13 @@ router.get("/account-details", async (req, res) => {
         });
       }
 
-      // Find accounts with matching email (case-insensitive)
+      // ✅ Case-insensitive email match
       accounts = await AccountDetailsCollection.find({
-        Email: {
-          $regex: new RegExp(`^${userEmail.trim()}$`, "i"),
-        },
+        Email: { $regex: `^${userEmail.trim()}$`, $options: "i" },
       }).lean();
     }
 
-    // ✅ Always return 200, even if empty
+    // ✅ Always return 200
     res.status(200).json({
       success: true,
       count: accounts.length,
@@ -2121,6 +2120,7 @@ router.get("/account-details", async (req, res) => {
     });
   }
 });
+
 
 
 
