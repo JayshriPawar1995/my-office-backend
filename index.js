@@ -2068,65 +2068,61 @@ app.post('/account-details', async (req, res) => {
 
 // Example backend route (Node.js/Express)
 
+router.get("/account-details", async (req, res) => {
+  try {
+    const { userEmail, userRole } = req.query;
+    let accounts = [];
 
-router.get('/account-details', async (req, res) => { 
-    try {
-        const { userEmail, userRole } = req.query;
-        
-        let accounts;
-
-        // If role is HR or Admin → fetch all
-        if (userRole && (userRole.toLowerCase() === "hr" || userRole.toLowerCase() === "admin")) {
-            accounts = await AccountDetailsCollection.find({}).lean();
-        } else {
-            // Validate email parameter
-            if (!userEmail) {
-                return res.status(400).json({ 
-                    success: false,
-                    message: "Email parameter is required"  
-                });
-            }
-
-            // Validate email format
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(userEmail)) {
-                return res.status(400).json({ 
-                    success: false,
-                    message: "Invalid email format" 
-                });
-            }
-
-            // Find accounts with matching email (case-insensitive)
-            accounts = await AccountDetailsCollection.find({ 
-                Email: { 
-                    $regex: new RegExp(`^${userEmail.trim()}$`, 'i') 
-                } 
-            }).lean();
-        }
-
-        if (!accounts || accounts.length === 0) {
-            return res.status(404).json({ 
-                success: false,
-                message: "No accounts found" 
-            });
-        }
-
-        // Return successful response
-        res.status(200).json({
-            success: true,
-            count: accounts.length,
-            data: accounts
+    // ✅ If HR or Admin → return ALL data
+    if (userRole && ["hr", "admin"].includes(userRole.toLowerCase())) {
+      accounts = await AccountDetailsCollection.find({}).lean();
+    } else {
+      // ✅ For normal users → require valid email
+      if (!userEmail) {
+        return res.status(200).json({
+          success: true,
+          count: 0,
+          data: [],
+          message: "Email parameter is required",
         });
+      }
 
-    } catch (error) {
-        console.error('Error fetching account details:', error);
-        res.status(500).json({ 
-            success: false,
-            message: "Server error while fetching account details",
-            error: error.message 
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(userEmail)) {
+        return res.status(200).json({
+          success: true,
+          count: 0,
+          data: [],
+          message: "Invalid email format",
         });
+      }
+
+      // Find accounts with matching email (case-insensitive)
+      accounts = await AccountDetailsCollection.find({
+        Email: {
+          $regex: new RegExp(`^${userEmail.trim()}$`, "i"),
+        },
+      }).lean();
     }
+
+    // ✅ Always return 200, even if empty
+    res.status(200).json({
+      success: true,
+      count: accounts.length,
+      data: accounts,
+    });
+  } catch (error) {
+    console.error("Error fetching account details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching account details", 
+      error: error.message,
+    });
+  }
 });
+
+
 
 // router.get('/account-details', async (req, res) => { 
 //     try {
