@@ -2074,7 +2074,7 @@ app.post('/account-details', async (req, res) => {
 
 router.get('/account-details', async (req, res) => { 
     try {
-        const { userEmail } = req.query;
+        const { userEmail } = req.query; 
         
         // Validate email parameter
         if (!userEmail) {
@@ -2089,16 +2089,16 @@ router.get('/account-details', async (req, res) => {
         if (!emailRegex.test(userEmail)) {
             return res.status(400).json({ 
                 success: false,
-                message: "Invalid email format" 
-            });
+                message: "Invalid email format"  
+            }); 
         }
 
-        // Find accounts with matching email (case-insensitive)
-        const accounts = await AccountDetailsCollection.find({ 
-            Email: { 
-                $regex: new RegExp(`^${userEmail.trim()}$`, 'i') 
-            } 
-        }).lean();
+        // Find accounts with matching email (case-insensitive) 
+       const accounts = await AccountDetailsCollection.find({ 
+    Email: {   // <-- use the actual field name in your DB
+        $regex: new RegExp(`^${userEmail.trim()}$`, 'i') 
+    } 
+}).lean();
 
         if (!accounts || accounts.length === 0) {
             return res.status(404).json({ 
@@ -2110,15 +2110,15 @@ router.get('/account-details', async (req, res) => {
         // Return successful response
         res.status(200).json({
             success: true,
-            count: accounts.length,
-            data: accounts
+            count: accounts.length,  
+            data: accounts 
         });
 
     } catch (error) {
-        console.error('Error fetching account details:', error);
+        console.error('Error fetching account details:', error); 
         res.status(500).json({ 
             success: false,
-            message: "Server error while fetching account details",
+            message: "Server error while fetching account details", 
             error: error.message 
         });
     }
