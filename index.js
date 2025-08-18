@@ -197,15 +197,15 @@ async function run() {
     });
 
 
-    app.post('/account-details ', async (req, res) => {
-      try {
-        const accountdetails = req.body;
-        const result = await UserCollection.insertOne(accountdetails);
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ message: error.message });
-      }
-    });
+    // app.post('/account-details ', async (req, res) => {
+    //   try {
+    //     const accountdetails = req.body;
+    //     const result = await UserCollection.insertOne(accountdetails);
+    //     res.send(result);
+    //   } catch (error) {
+    //     res.status(500).send({ message: error.message });
+    //   }
+    // });
 
     app.get('/attendance/status', async (req, res) => {
       try {
@@ -2037,20 +2037,19 @@ console.log('Account Details Found:------------------ ')
       }
     });
 ////////////////////////////////////////////////////////////////////-------------------------------------------------
-app.post('/account-details', async (req, res) => {
+app.post('/account-details', async (req, res) => { 
   try {
-    const { accountNumber, initialDeposit, status = 'active',Email  } = req.body;
+    const { accountNumber, initialDeposit, status = 'active', userEmail } = req.body;
 
-    // Validate required fields
-    if (!accountNumber || !initialDeposit) {
-      return res.status(400).send({ message: 'Account number and initial deposit are required' });
+    if (!accountNumber || !initialDeposit || !userEmail) {
+      return res.status(400).send({ message: 'Account number, initial deposit, and email are required' });
     }
 
     const accountDetail = {
-      Email,
       accountNumber,
       initialDeposit,
-      status: status === 'deactive' ? 'deactive' : 'active', // only allow "active" or "deactive"
+      status: status === 'deactive' ? 'deactive' : 'active',
+      userEmail: userEmail.trim().toLowerCase(), // lowercase for matching
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -2063,40 +2062,132 @@ app.post('/account-details', async (req, res) => {
   }
 });
 
-app.get('/account-details', async (req, res) => {
-  try {
-    const { status, accountNumber } = req.query;
-    const query = {};
 
-    // Optional filter: status
-    if (status && status !== 'all') {
-      query.status = status;
+
+
+
+// Example backend route (Node.js/Express)
+
+
+router.get('/account-details', async (req, res) => { 
+    try {
+        const { userEmail, userRole } = req.query;
+        
+        let accounts;
+
+        // If role is HR or Admin → fetch all
+        if (userRole && (userRole.toLowerCase() === "hr" || userRole.toLowerCase() === "admin")) {
+            accounts = await AccountDetailsCollection.find({}).lean();
+        } else {
+            // Validate email parameter
+            if (!userEmail) {
+                return res.status(400).json({ 
+                    success: false,
+                    message: "Email parameter is required"  
+                });
+            }
+
+            // Validate email format
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(userEmail)) {
+                return res.status(400).json({ 
+                    success: false,
+                    message: "Invalid email format" 
+                });
+            }
+
+            // Find accounts with matching email (case-insensitive)
+            accounts = await AccountDetailsCollection.find({ 
+                Email: { 
+                    $regex: new RegExp(`^${userEmail.trim()}$`, 'i') 
+                } 
+            }).lean();
+        }
+
+        if (!accounts || accounts.length === 0) {
+            return res.status(404).json({ 
+                success: false,
+                message: "No accounts found" 
+            });
+        }
+
+        // Return successful response
+        res.status(200).json({
+            success: true,
+            count: accounts.length,
+            data: accounts
+        });
+
+    } catch (error) {
+        console.error('Error fetching account details:', error);
+        res.status(500).json({ 
+            success: false,
+            message: "Server error while fetching account details",
+            error: error.message 
+        });
     }
-
-    // Optional filter: account number (exact match)
-    if (accountNumber) {
-      query.accountNumber = accountNumber;
-    }
-
-    const result = await AccountDetailsCollection.find(query)
-      .sort({ createdAt: -1 })
-      .toArray();
-
-    res.send(result);
-  } catch (error) {
-    console.error('Error fetching account details:', error);
-    res.status(500).send({ message: error.message });
-  }
 });
 
-app.get('/account-details/:id', async (req, res) => {
+// router.get('/account-details', async (req, res) => { 
+//     try {
+//         const { userEmail } = req.query;
+        
+//         // Validate email parameter
+//         if (!userEmail) {
+//             return res.status(400).json({ 
+//                 success: false,
+//                 message: "Email parameter is required" 
+//             });
+//         }
+
+//         // Validate email format
+//         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+//         if (!emailRegex.test(userEmail)) {
+//             return res.status(400).json({ 
+//                 success: false,
+//                 message: "Invalid email format" 
+//             });
+//         }
+
+//         // Find accounts with matching email (case-insensitive)
+//         const accounts = await AccountDetailsCollection.find({ 
+//             Email: { 
+//                 $regex: new RegExp(`^${userEmail.trim()}$`, 'i') 
+//             } 
+//         }).lean();
+
+//         if (!accounts || accounts.length === 0) {
+//             return res.status(404).json({ 
+//                 success: false,
+//                 message: "No accounts found for this email" 
+//             });
+//         }
+
+//         // Return successful response
+//         res.status(200).json({
+//             success: true,
+//             count: accounts.length,
+//             data: accounts
+//         });
+
+//     } catch (error) {
+//         console.error('Error fetching account details:', error);
+//         res.status(500).json({ 
+//             success: false,
+//             message: "Server error while fetching account details",
+//             error: error.message 
+//         });
+//     }
+// });
+
+app.get('/account-details/:id', async (req, res) => {   
   try {
     const { id } = req.params;
 
     // Validate and convert id to ObjectId
     const query = { _id: new ObjectId(id) };
-
-    const accountDetail = await AccountDetailsCollection.findOne(query);
+ 
+    const accountDetail = await AccountDetailsCollection.findOne(query); 
 
     if (!accountDetail) {
       return res.status(404).send({ message: 'Account detail not found' });
